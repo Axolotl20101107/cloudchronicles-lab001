@@ -1,0 +1,142 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "0f1e0979",
+   "metadata": {},
+   "source": [
+    "# 🧠 cloudChronicles Lab #001: Disaster Recovery Detective\n",
+    "\n",
+    "**Lab Type:** Idea  \n",
+    "**Estimated Time:** 30–45 mins  \n",
+    "**Skill Level:** Beginner"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "a97f86ab",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Let's begin by printing your name to personalize the notebook\n",
+    "your_name = \"\"\n",
+    "print(f\"Welcome to the lab, {your_name}!\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0f94d019",
+   "metadata": {},
+   "source": [
+    "## 🔍 STAR Method Lab Prompt\n",
+    "\n",
+    "**Situation:**  \n",
+    "[On June 2nd, 2025, at 11:22 AM EDT, a major regional outage has been declared in Google Cloud's us-central1 region, impacting all services including Compute Engine, Cloud SQL, Cloud Storage, and associated services. Our primary applications and data reside in us-central1, and immediate action is required to restore business continuity with minimal data loss and downtime.,
+    "\n",
+    "**Task:**  \n",
+    "[The task is to execute a comprehensive disaster recovery plan to failover our critical applications and data from us-central1 to a pre-designated recovery region (us-east4 in this case), ensure data consistency, re-establish service, and prepare for eventual failback once us-central1 is restored.]\n",
+    "\n",
+    "**Action:**  \n",
+    "[Phase 1: Detection and Alerting
+Pub/Sub Alerts with Cloud Monitoring:
+Action: Automated alerts are configured in Cloud Monitoring to detect service disruptions and resource unavailability within us-central1. These alerts trigger messages to a dedicated Pub/Sub topic.
+Details:
+Metrics like compute.googleapis.com/instance/cpu/usage, cloudsql.googleapis.com/database/cpu/utilization, and storage.googleapis.com/api/request_count with anomaly detection thresholds are set up.
+Alert policies are linked to a Pub/Sub topic (e.g., dr-alerts).
+Subscribers to this Pub/Sub topic include our incident management system, on-call paging systems, and a Cloud Function for automated initial steps.
+Trigger: Upon detection of the us-central1 outage, the Pub/Sub topic is flooded with alerts.
+Phase 2: Failover Execution
+Cloud SQL Replicas (Cross-Region Read Replicas):
+
+Action: For our critical databases (e.g., PostgreSQL, MySQL), we have pre-provisioned cross-region read replicas in us-east4.
+Details:
+Our primary Cloud SQL instances in us-central1 have asynchronous read replicas continuously replicating data to us-east4.
+Upon outage detection, the DR automation (or manual intervention, if automated failover is not desired) will promote the us-east4 read replica to a standalone primary instance. This is achieved via the gcloud sql instances promote-replica command.
+RPO (Recovery Point Objective): This approach provides a low RPO, typically in seconds or minutes, depending on replication lag.
+RTO (Recovery Time Objective): Promotion is generally fast, contributing to a low RTO.
+Important Considerations:
+Application connection strings will need to be updated to point to the new primary instance in us-east4.
+Any in-flight transactions on the us-central1 primary that haven't replicated will be lost.
+Multi-Region Cloud Storage:
+
+Action: All mission-critical static assets, backups, and large datasets are stored in multi-region Cloud Storage buckets.
+Details:
+Our Cloud Storage buckets are configured as MULTI_REGIONAL (e.g., us for US-wide redundancy) rather than REGIONAL. This automatically replicates data across multiple regions within the selected multi-region location.
+During a us-central1 outage, data stored in us multi-region buckets remains accessible from other healthy regions within the us multi-region (e.g., us-east4).
+No explicit failover action is required for Cloud Storage itself; applications will automatically access data from an available healthy location.
+Benefit: Zero RPO and RTO for data access.
+Application Redeployment/Traffic Shift (Compute Engine, GKE, App Engine):
+
+Action: Our application deployments are templated and can be quickly provisioned in us-east4. For services like GKE, we utilize multi-cluster ingress or traffic management tools.
+Details:
+Compute Engine: Pre-built instance templates and managed instance groups (MIGs) are used to quickly spin up equivalent instances in us-east4. Load Balancers are reconfigured to direct traffic to the us-east4 backend.
+Google Kubernetes Engine (GKE):
+Option A (Active/Passive): A second GKE cluster in us-east4 is maintained. During an outage, a traffic shift occurs at the global load balancer level (e.g., Global External HTTP(S) Load Balancer) to direct traffic to the us-east4 cluster. Our CI/CD pipelines are configured to deploy to both clusters.
+Option B (Active/Active - more complex): If desired, applications can be designed for active/active across regions, but this adds significant complexity to data synchronization and consistency. For this plan, we assume active/passive.
+App Engine: If using App Engine, applications would be deployed to a us-east4 project or a separate App Engine service configured for us-east4.
+DNS Failover: Google Cloud DNS records are updated to point to the new load balancer IPs or application endpoints in us-east4. This can be automated via Cloud Functions triggered by the Pub/Sub alert or through a scheduled job.
+RTO: This step is generally the most time-consuming in the RTO equation, as it involves provisioning and bringing applications online. Automation is key here.
+Phase 3: Post-Failover Validation and Monitoring
+System Health Checks:
+Action: Comprehensive health checks are performed on all failed-over applications and infrastructure in us-east4.
+Details: Monitoring dashboards are updated to reflect the us-east4 environment. Automated probes verify application functionality, database connectivity, and data integrity.
+User Communication:
+Action: Proactive communication to stakeholders and end-users about the outage and recovery status.
+Details: Update status pages, send out email notifications, and leverage social media if appropriate.
+Phase 4: Failback (Once us-central1 is restored)
+Replication Re-establishment:
+Action: Once us-central1 is stable and services are restored, re-establish replication from us-east4 back to us-central1.
+Details:
+Cloud SQL: Create a new read replica in us-central1 from the currently active primary in us-east4. Allow it to fully sync.
+Applications: Deploy and sync applications in us-central1 if required (for active/passive scenarios).
+Planned Failback:
+Action: A controlled failback will be executed during a maintenance window.
+Details:
+Cloud SQL: Promote the us-central1 replica to primary.
+Traffic Shift: Reconfigure Load Balancers and DNS to direct traffic back to us-central1.
+Validation: Verify all systems are operational in us-central1.
+Cleanup:
+Action: Decommission temporary resources in us-east4 that are no longer needed.
+]\n",
+    "\n",
+    "**Expected Result:**  \n",
+    "[By implementing this STAR-based disaster recovery plan leveraging Google Cloud's capabilities, we aim to achieve the following results:
+
+Minimized Downtime (Low RTO): By having pre-provisioned replicas and automated failover mechanisms, we significantly reduce the time taken to restore critical services. For Cloud SQL, RTO is expected to be under 15 minutes for promotion. For applications, RTO will depend on the complexity of redeployment but is targeted under 1 hour.
+Minimized Data Loss (Low RPO): Cloud SQL cross-region read replicas ensure near real-time data synchronization, leading to an RPO in minutes. Multi-region Cloud Storage guarantees zero data loss and continuous availability of static assets.
+Business Continuity: Critical business functions are restored quickly, ensuring continued operations despite a major regional outage.
+Automated Alerting and Response: Pub/Sub alerts provide immediate notification of an outage, enabling a rapid response and potentially triggering automated recovery actions.
+Controlled and Tested Recovery Process: The plan outlines a structured approach to failover and failback, ensuring a predictable and repeatable recovery. Regular DR drills will validate the effectiveness of this plan.
+Improved Resilience: The architecture is designed to be highly resilient to regional failures, providing a strong foundation for future growth and mitigating business risk.
+This plan provides a high-level overview. A detailed implementation would include specific instance types, network configurations, IAM roles, detailed Cloud Functions for automation, and comprehensive testing protocols.]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "397b221d",
+   "metadata": {},
+   "source": [
+    "## ✍️ Your Assignment\n",
+    "\n",
+    "_Use this section to complete your deliverable:_\n",
+    "\n",
+    "```markdown\n",
+    "(Example Format)\n",
+    "\n",
+    "- **Primary Region**: us-central1  \n",
+    "- **Backup Location**: us-east1  \n",
+    "- **Failover Trigger**: Load balancer health check + Pub/Sub alert  \n",
+    "- **Redundancy Services**:  \n",
+    "   - Cloud SQL with failover  \n",
+    "   - Cloud Storage versioning  \n",
+    "   - Cloud Functions for health monitoring  \n",
+    "- **Backup Schedule**: Every 6 hours, daily export to multi-region bucket  \n",
+    "```"
+   ]
+  }
+ ],
+ "metadata": {},
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
